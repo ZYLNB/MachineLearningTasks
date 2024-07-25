@@ -7,7 +7,7 @@ import numpy as np
 
 # 任务和模型设置
 GLUE_TASKS = ["cola", "mnli", "mnli-mm", "mrpc", "qnli", "qqp", "rte", "sst2", "stsb", "wnli"]
-task = "cola"
+task = "mrpc"
 model_checkpoint = "distilbert-base-uncased"
 batch_size = 16
 
@@ -124,6 +124,61 @@ for batch in eval_dataloader:
 results = metric.compute(predictions=np.array(all_predictions), references=np.array(all_labels))
 print("eval:", results)
 
+from transformers import Trainer, TrainingArguments, AutoModelForSequenceClassification, AutoTokenizer
+from transformers import AutoConfig, AutoModelForSequenceClassification
+from datasets import load_dataset
+
+# 定义超参数搜索空间
+def hp_space(trial):
+    return {
+        "learning_rate": trial.suggest_loguniform("learning_rate", 1e-5, 5e-5),
+        "num_train_epochs": trial.suggest_int("num_train_epochs", 1, 5),
+        "per_device_train_batch_size": trial.suggest_categorical("per_device_train_batch_size", [16, 32, 64]),
+    }
+
+# 定义模型初始化函数
+def model_init():
+    return AutoModelForSequenceClassification.from_pretrained(model_checkpoint, num_labels=num_labels)
+
+# 定义训练参数
+args = TrainingArguments(
+    output_dir="./results",
+    evaluation_strategy="epoch",
+    save_strategy="epoch",
+    learning_rate=2e-5,
+    per_device_train_batch_size=16,
+    num_train_epochs=3,
+    weight_decay=0.01,
+)
+
+# 创建 Trainer 对象
+trainer = Trainer(
+    model_init=model_init,
+    args=args,
+    train_dataset=encoded_dataset["train"],
+    eval_dataset=encoded_dataset["validation"],
+    tokenizer=tokenizer,
+    compute_metrics=lambda p: {'accuracy': (p.predictions.argmax(-1) == p.label_ids).mean()}
+)
+
+# 进行超参数搜索
+best_run = trainer.hyperparameter_search(
+    n_trials=2,
+    direction="maximize",
+    hp_space=hp_space
+)
+
+# 打印最佳超参数组合
+print(best_run)
+
+# 将最佳超参数设置到 trainer.args 中
+for n, v in best_run.hyperparameters.items():
+    setattr(trainer.args, n, v)
+
+# 训练模型
+trainer.train()
+
 # 保存模型和tokenizer
-model.save_pretrained("cola_model")
-tokenizer.save_pretrained("cola_tokenizer")
+model.save_pretrained("mrpc_model")
+tokenizer.save_pretrained("mrpc_tokenizer")
+

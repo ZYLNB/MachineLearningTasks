@@ -11,7 +11,7 @@ def load_model(model_path, tokenizer_path):
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
     return model, tokenizer
 
-model, tokenizer = load_model("./cola_model", "./cola_tokenizer")
+model, tokenizer = load_model("./mrpc_model", "./mrpc_tokenizer")
 
 # 预测函数
 def predict(texts, model, tokenizer, max_length=128):
@@ -22,7 +22,6 @@ def predict(texts, model, tokenizer, max_length=128):
     predictions = outputs.logits.argmax(dim=-1).cpu().numpy()
     return predictions
 
-# 示例文本
-texts = ["This is a great movie!"]
-predictions = predict(texts, model, tokenizer)
+text_pairs = [("The company is performing well.", "The company is doing good.")]
+predictions = predict(text_pairs, model, tokenizer)
 print(predictions)
